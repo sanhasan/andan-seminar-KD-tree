@@ -4,14 +4,19 @@ from time import perf_counter
 import numpy as np
 
 from utils.cosine_distance import cosine_distance
+from utils.kernels import KERNELS
 from utils.minkowski_distance import minkowski_distance
 
 
 class KNNClassifier(ABC):
-    def __init__(self, k=5, distance_metric='euclidean', p=2):
+    def __init__(self, k=5, distance_metric='euclidean', p=2,
+                 kernel=None, h=1.0):
         self.k = k
         self.distance_metric = distance_metric
         self.p = p
+        self.kernel_name = kernel
+        self.kernel = None if kernel is None else KERNELS[kernel]
+        self.h = h
         self.X_train = None
         self.y_train = None
         self._time = 0.0
@@ -38,12 +43,32 @@ class KNNClassifier(ABC):
     def _find_dists(self, x):
         pass
 
+    def _find_kernel_dists(self, x):
+        return self._find_dists(x)
+
+    def _apply_kernel(self, distances):
+        classes = np.unique(self.y_train)
+        scores = np.zeros(len(classes))
+        label_to_ind = {label: i for i, label in enumerate(classes)}
+
+        for distance, ind in distances:
+            label = self.y_train[ind]
+            scores[label_to_ind[label]] += self.kernel(distance / self.h)
+
+        return classes, scores
+
     def predict(self, X):
         start = perf_counter()
         self._cnt_calculations = 0
 
         predictions = []
         for x in X:
+            if self.kernel is not None:
+                distances = self._find_kernel_dists(x)
+                classes, scores = self._apply_kernel(distances)
+                predictions.append(classes[np.argmax(scores)])
+                continue
+
             distances = self._find_dists(x)
 
             k_nearest_indices = [idx for _, idx in distances[:self.k]]
@@ -63,6 +88,14 @@ class KNNClassifier(ABC):
 
         probabilities = []
         for x in X:
+            if self.kernel is not None:
+                distances = self._find_kernel_dists(x)
+                classes, scores = self._apply_kernel(distances)
+                total = np.sum(scores)
+                scores = scores / total
+                probabilities.append(dict(zip(classes, scores)))
+                continue
+
             distances = self._find_dists(x)
             
             k_nearest_indices = [idx for _, idx in distances[:self.k]]

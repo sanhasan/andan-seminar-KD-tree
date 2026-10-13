@@ -1,6 +1,10 @@
 import numpy as np
 
-from benchmarks.common_benchmark import _get_metrics
+from benchmarks.common_benchmark import (
+    DATA_DISTRIBUTIONS,
+    _distribution_name,
+    _get_metrics,
+)
 
 
 METRIC = (
@@ -31,8 +35,10 @@ def _metric_name(metric):
 
 def run():
     result = []
-    for metric in METRIC:
-        metrics = _get_metrics(metric=metric)
-        metrics["metric"] = _metric_name(metric)
-        result.append(metrics)
+    for distribution in DATA_DISTRIBUTIONS:
+        for metric in METRIC:
+            metrics = _get_metrics(metric=metric, distribution=distribution)
+            metrics["metric"] = _metric_name(metric)
+            metrics["distribution"] = _distribution_name(distribution)
+            result.append(metrics)
     return result

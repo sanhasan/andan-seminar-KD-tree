@@ -7,8 +7,15 @@ from utils.minkowski_distance import minkowski_distance
 
 
 class KNNClassifier(AbstractKNNClassifier):
-    def __init__(self, k=5, distance_metric='euclidean', p=2):
-        super().__init__(k=k, distance_metric=distance_metric, p=p)
+    def __init__(self, k=5, distance_metric='euclidean', p=2,
+                 kernel=None, h=1.0):
+        super().__init__(
+            k=k,
+            distance_metric=distance_metric,
+            p=p,
+            kernel=kernel,
+            h=h,
+        )
         self._root = None
 
     def fit(self, X, y):
@@ -20,6 +27,11 @@ class KNNClassifier(AbstractKNNClassifier):
         distances = []
         self._search(x, self._root, distances)
         return sorted((-distance, -index) for distance, index in distances)
+
+    def _find_kernel_dists(self, x):
+        distances = []
+        self._kernel_search(x, self._root, distances)
+        return distances
 
     def _build_tree(self, indices, depth):
         if len(indices) == 0:
@@ -72,3 +84,33 @@ class KNNClassifier(AbstractKNNClassifier):
             near, far = right, left
         self._search(x, near, kbest)
         self._search(x, far, kbest)
+
+    def _kernel_search(self, x, node, distances):
+        if node is None:
+            return
+
+        index, axis, left, right, lower, upper = node
+
+        if self.kernel_name != 'gaussian' and self.distance_metric != 'cosine':
+            p = self.p
+            if self.distance_metric == 'euclidean':
+                p = 2
+            elif self.distance_metric == 'manhattan':
+                p = 1
+
+            nearest = np.clip(x, lower, upper)
+            if minkowski_distance(x, nearest, p=p) >= self.h:
+                return
+
+        point = self.X_train[index]
+        distance = self._compute_distance(x, point)
+
+        if self.kernel_name == 'gaussian' or distance < self.h:
+            distances.append((distance, index))
+
+        if x[axis] < point[axis]:
+            near, far = left, right
+        else:
+            near, far = right, left
+        self._kernel_search(x, near, distances)
+        self._kernel_search(x, far, distances)
